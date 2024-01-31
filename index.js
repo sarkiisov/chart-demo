@@ -1,7 +1,7 @@
 const fs = require("fs");
 const express = require("express");
 const Chart = require("chart.js/auto");
-const { createCanvas } = require("canvas");
+const { createCanvas, loadImage } = require("canvas");
 
 const app = express();
 
@@ -12,6 +12,34 @@ const COLORS = {
   blue: "rgb(54, 162, 235)",
   yellow: "rgb(255, 205, 86)",
 };
+
+app.get("/merge", async function (req, res) {
+  const images = ["image.png", "image.copy.png"];
+
+  let width = 0;
+  let height = 0;
+  for (let image of images) {
+    const { width: w, height: h } = await loadImage(image);
+    width += w;
+    height = Math.max(height, h);
+  }
+
+  const canvas = createCanvas(width, height);
+  const ctx = canvas.getContext("2d");
+
+  let x = 0;
+  for (let image of images) {
+    const img = await loadImage(image);
+    ctx.drawImage(img, x, 0);
+    x += img.width;
+  }
+
+  const buffer = canvas.toBuffer("image/png");
+  fs.writeFileSync("output.png", buffer);
+
+  res.contentType("image/png");
+  res.send(buffer);
+});
 
 app.get("/", function (req, res) {
   const canvas = createCanvas(400, 400);
@@ -28,6 +56,8 @@ app.get("/", function (req, res) {
     return (sum(ctx.dataset.data) / maxValue) * maxDegree;
   };
 
+  const spacing = 0.2;
+
   const data = {
     datasets: [
       {
@@ -36,12 +66,14 @@ app.get("/", function (req, res) {
         backgroundColor: [COLORS.red],
         circumference,
       },
+      { weight: spacing },
       {
         label: "Blue",
         data: [20],
         backgroundColor: [COLORS.blue],
         circumference,
       },
+      { weight: spacing },
       {
         label: "Yellow",
         data: [8],
@@ -51,9 +83,12 @@ app.get("/", function (req, res) {
     ],
   };
 
-  Chart.defaults.elements.arc.borderRadius = 10000;
+  const options = { layout: { padding: 20 } };
 
-  new Chart(ctx, { type: "doughnut", data });
+  Chart.defaults.elements.arc.borderRadius = 10000;
+  Chart.defaults.elements.arc.borderWidth = 0;
+
+  new Chart(ctx, { type: "doughnut", data, options });
 
   fs.writeFileSync("./image.png", Buffer(canvas.toBuffer("image/png")));
 
